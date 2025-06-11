@@ -31,6 +31,8 @@ open class RSIShareViewController: SLComposeServiceViewController {
         
         // load group and app id from build info
         loadIds()
+        uploadFiles()
+        didSelectPost()
     }
     
     // Redirect to host app when user click on Post
@@ -40,8 +42,14 @@ open class RSIShareViewController: SLComposeServiceViewController {
     
     open override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        
-        // This is called after the user selects Post. Do the upload of contentText and/or NSExtensionContext attachments.
+    }
+    
+    open override func configurationItems() -> [Any]! {
+        // To add configuration options via table cells at the bottom of the sheet, return an array of SLComposeSheetConfigurationItem here.
+        return []
+    }
+
+    open func uploadFiles() {
         if let content = extensionContext!.inputItems[0] as? NSExtensionItem {
             if let contents = content.attachments {
                 for (index, attachment) in (contents).enumerated() {
@@ -88,11 +96,6 @@ open class RSIShareViewController: SLComposeServiceViewController {
                 }
             }
         }
-    }
-    
-    open override func configurationItems() -> [Any]! {
-        // To add configuration options via table cells at the bottom of the sheet, return an array of SLComposeSheetConfigurationItem here.
-        return []
     }
     
     private func loadIds() {
