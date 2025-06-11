@@ -31,7 +31,6 @@ open class RSIShareViewController: SLComposeServiceViewController {
         
         // load group and app id from build info
         loadIds()
-        didSelectPost()
     }
     
     // Redirect to host app when user click on Post
