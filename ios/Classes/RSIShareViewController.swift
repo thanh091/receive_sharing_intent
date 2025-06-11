@@ -31,7 +31,6 @@ open class RSIShareViewController: SLComposeServiceViewController {
         
         // load group and app id from build info
         loadIds()
-        uploadFiles()
         didSelectPost()
     }
     
@@ -42,6 +41,7 @@ open class RSIShareViewController: SLComposeServiceViewController {
     
     open override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        uploadFiles()
     }
     
     open override func configurationItems() -> [Any]! {
