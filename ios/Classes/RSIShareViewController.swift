@@ -210,15 +210,14 @@ open class RSIShareViewController: UIViewController {
         userDefaults?.set(toData(data: sharedMedia), forKey: kUserDefaultsKey)
         userDefaults?.set(message, forKey: kUserDefaultsMessageKey)
         userDefaults?.synchronize()
+        self.redirectToHostApp()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             self.completeRequest()
         }
     }
 
     private func completeRequest() {
-        self.extensionContext?.completeRequest(returningItems: nil, completionHandler: { _ in 
-            self.redirectToHostApp()
-        })
+        self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
     }
     
     private func redirectToHostApp() {
