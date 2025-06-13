@@ -217,7 +217,7 @@ open class RSIShareViewController: SLComposeServiceViewController {
         }
 
         DispatchQueue.main.async {
-            extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
+            self.extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
         }
     }
     
