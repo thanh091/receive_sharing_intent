@@ -216,7 +216,9 @@ open class RSIShareViewController: SLComposeServiceViewController {
             }
         }
 
-        extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
+        DispatchQueue.main.async {
+            extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
+        }
     }
     
     private func dismissWithError() {
