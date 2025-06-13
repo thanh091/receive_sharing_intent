@@ -210,7 +210,9 @@ open class RSIShareViewController: UIViewController {
         userDefaults?.set(toData(data: sharedMedia), forKey: kUserDefaultsKey)
         userDefaults?.set(message, forKey: kUserDefaultsMessageKey)
         userDefaults?.synchronize()
-        completeRequest()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.completeRequest()
+        }
     }
 
     private func completeRequest() {
