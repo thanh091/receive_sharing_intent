@@ -216,7 +216,9 @@ open class RSIShareViewController: UIViewController {
     private func completeRequest() {
         DispatchQueue.main.async {
             self.extensionContext?.completeRequest(returningItems: nil, completionHandler: { _ in 
-                self.redirectToHostApp()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    self.redirectToHostApp()
+                }
             })
         }
     }
