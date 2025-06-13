@@ -11,10 +11,12 @@ import MobileCoreServices
 import Photos
 
 @available(swift, introduced: 5.0)
-open class RSIShareViewController: SLComposeServiceViewController {
+open class RSIShareViewController: UIViewController {
     var hostAppBundleIdentifier = ""
     var appGroupId = ""
     var sharedMedia: [SharedMediaFile] = []
+    var processedItemsCount = 0
+    var totalItemsCount = 0
 
     /// Override this method to return false if you don't want to redirect to host app automatically
     /// Default is true
@@ -22,77 +24,105 @@ open class RSIShareViewController: SLComposeServiceViewController {
         return true
     }
     
-    open override func isContentValid() -> Bool {
-        return true
-    }
-    
     open override func viewDidLoad() {
         super.viewDidLoad()
         
-        // load group and app id from build info
+        // Hide the view since we don't want to show any UI
+        view.isHidden = true
+        
+        // Load group and app id from build info
         loadIds()
+        
+        // Start processing files immediately
+        processSharedContent()
     }
     
-    // Redirect to host app when user click on Post
-    open override func didSelectPost() {
-        saveAndRedirect(message: contentText)
+    private func processSharedContent() {
+        guard let extensionContext = extensionContext,
+              let inputItems = extensionContext.inputItems as? [NSExtensionItem] else {
+            dismissWithError()
+            return
+        }
+        
+        // Handle case where there are no input items
+        guard !inputItems.isEmpty else {
+            saveAndRedirect()
+            return
+        }
+        
+        // Count total attachments to track completion
+        totalItemsCount = inputItems.compactMap { $0.attachments }.flatMap { $0 }.count
+        
+        // If no attachments, just redirect
+        guard totalItemsCount > 0 else {
+            saveAndRedirect()
+            return
+        }
+        
+        // Process all input items
+        for inputItem in inputItems {
+            processInputItem(inputItem)
+        }
     }
     
-    open override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        uploadFiles()
+    private func processInputItem(_ inputItem: NSExtensionItem) {
+        guard let attachments = inputItem.attachments else { return }
+        
+        for (index, attachment) in attachments.enumerated() {
+            processAttachment(attachment, itemIndex: index, inputItem: inputItem)
+        }
     }
     
-    open override func configurationItems() -> [Any]! {
-        // To add configuration options via table cells at the bottom of the sheet, return an array of SLComposeSheetConfigurationItem here.
-        return []
-    }
-
-    open func uploadFiles() {
-        if let content = extensionContext!.inputItems[0] as? NSExtensionItem {
-            if let contents = content.attachments {
-                for (index, attachment) in (contents).enumerated() {
-                    for type in SharedMediaType.allCases {
-                        if attachment.hasItemConformingToTypeIdentifier(type.toUTTypeIdentifier) {
-                            attachment.loadItem(forTypeIdentifier: type.toUTTypeIdentifier) { [weak self] data, error in
-                                guard let this = self, error == nil else {
-                                    self?.dismissWithError()
-                                    return
-                                }
-                                switch type {
-                                case .text:
-                                    if let text = data as? String {
-                                        this.handleMedia(forLiteral: text,
-                                                         type: type,
-                                                         index: index,
-                                                         content: content)
-                                    }
-                                case .url:
-                                    if let url = data as? URL {
-                                        this.handleMedia(forLiteral: url.absoluteString,
-                                                         type: type,
-                                                         index: index,
-                                                         content: content)
-                                    }
-                                default:
-                                    if let url = data as? URL {
-                                        this.handleMedia(forFile: url,
-                                                         type: type,
-                                                         index: index,
-                                                         content: content)
-                                    }
-                                    else if let image = data as? UIImage {
-                                        this.handleMedia(forUIImage: image,
-                                                         type: type,
-                                                         index: index,
-                                                         content: content)
-                                    }
-                                }
-                            }
-                            break
+    private func processAttachment(_ attachment: NSItemProvider, itemIndex: Int, inputItem: NSExtensionItem) {
+        // Find the first matching type
+        for type in SharedMediaType.allCases {
+            if attachment.hasItemConformingToTypeIdentifier(type.toUTTypeIdentifier) {
+                attachment.loadItem(forTypeIdentifier: type.toUTTypeIdentifier) { [weak self] data, error in
+                    DispatchQueue.main.async {
+                        guard let self = self else { return }
+                        
+                        if let error = error {
+                            print("Error loading attachment: \(error)")
+                            self.handleProcessingComplete()
+                            return
                         }
+                        
+                        self.handleLoadedData(data, type: type, inputItem: inputItem)
                     }
                 }
+                break // Only process the first matching type
+            }
+        }
+    }
+    
+    private func handleLoadedData(_ data: NSSecureCoding?, type: SharedMediaType, inputItem: NSExtensionItem) {
+        switch type {
+        case .text:
+            if let text = data as? String {
+                handleMedia(forLiteral: text, type: type, inputItem: inputItem)
+            }
+        case .url:
+            if let url = data as? URL {
+                handleMedia(forLiteral: url.absoluteString, type: type, inputItem: inputItem)
+            }
+        default:
+            if let url = data as? URL {
+                handleMedia(forFile: url, type: type, inputItem: inputItem)
+            } else if let image = data as? UIImage {
+                handleMedia(forUIImage: image, type: type, inputItem: inputItem)
+            }
+        }
+        
+        handleProcessingComplete()
+    }
+    
+    private func handleProcessingComplete() {
+        processedItemsCount += 1
+        
+        // Check if all items have been processed
+        if processedItemsCount >= totalItemsCount {
+            if shouldAutoRedirect() {
+                saveAndRedirect()
             }
         }
     }
@@ -117,20 +147,15 @@ open class RSIShareViewController: SLComposeServiceViewController {
     }
     
     
-    private func handleMedia(forLiteral item: String, type: SharedMediaType, index: Int, content: NSExtensionItem) {
+    private func handleMedia(forLiteral item: String, type: SharedMediaType, inputItem: NSExtensionItem) {
         sharedMedia.append(SharedMediaFile(
             path: item,
             mimeType: type == .text ? "text/plain": nil,
             type: type
         ))
-        if index == (content.attachments?.count ?? 0) - 1 {
-            if shouldAutoRedirect() {
-                saveAndRedirect()
-            }
-        }
     }
 
-    private func handleMedia(forUIImage image: UIImage, type: SharedMediaType, index: Int, content: NSExtensionItem){
+    private func handleMedia(forUIImage image: UIImage, type: SharedMediaType, inputItem: NSExtensionItem){
         let tempPath = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupId)!.appendingPathComponent("TempImage.png")
         if self.writeTempFile(image, to: tempPath) {
             let newPathDecoded = tempPath.absoluteString.removingPercentEncoding!
@@ -140,14 +165,9 @@ open class RSIShareViewController: SLComposeServiceViewController {
                 type: type
             ))
         }
-        if index == (content.attachments?.count ?? 0) - 1 {
-            if shouldAutoRedirect() {
-                saveAndRedirect()
-            }
-        }
     }
     
-    private func handleMedia(forFile url: URL, type: SharedMediaType, index: Int, content: NSExtensionItem) {
+    private func handleMedia(forFile url: URL, type: SharedMediaType, inputItem: NSExtensionItem) {
         let fileName = getFileName(from: url, type: type)
         let newPath = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupId)!.appendingPathComponent(fileName)
         
@@ -165,6 +185,13 @@ open class RSIShareViewController: SLComposeServiceViewController {
                         duration: videoInfo.duration,
                         type: type
                     ))
+                } else {
+                    // Fallback if video info extraction fails
+                    sharedMedia.append(SharedMediaFile(
+                        path: newPathDecoded,
+                        mimeType: url.mimeType(),
+                        type: type
+                    ))
                 }
             } else {
                 sharedMedia.append(SharedMediaFile(
@@ -172,12 +199,6 @@ open class RSIShareViewController: SLComposeServiceViewController {
                     mimeType: url.mimeType(),
                     type: type
                 ))
-            }
-        }
-        
-        if index == (content.attachments?.count ?? 0) - 1 {
-            if shouldAutoRedirect() {
-                saveAndRedirect()
             }
         }
     }
@@ -202,6 +223,7 @@ open class RSIShareViewController: SLComposeServiceViewController {
             while responder != nil {
                 if let application = responder as? UIApplication {
                     application.open(url!, options: [:], completionHandler: nil)
+                    break
                 }
                 responder = responder?.next
             }
@@ -211,27 +233,22 @@ open class RSIShareViewController: SLComposeServiceViewController {
             while (responder != nil) {
                 if (responder?.responds(to: selectorOpenURL))! {
                     _ = responder?.perform(selectorOpenURL, with: url)
+                    break
                 }
                 responder = responder!.next
             }
         }
 
         DispatchQueue.main.async {
-            self.extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
+            self.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
         }
     }
     
     private func dismissWithError() {
         print("[ERROR] Error loading data!")
-        let alert = UIAlertController(title: "Error", message: "Error loading data", preferredStyle: .alert)
-        
-        let action = UIAlertAction(title: "Error", style: .cancel) { _ in
-            self.dismiss(animated: true, completion: nil)
+        DispatchQueue.main.async {
+            self.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
         }
-        
-        alert.addAction(action)
-        present(alert, animated: true, completion: nil)
-        extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
     }
     
     private func getFileName(from url: URL, type: SharedMediaType) -> String {
