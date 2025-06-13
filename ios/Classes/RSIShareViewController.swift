@@ -210,7 +210,15 @@ open class RSIShareViewController: UIViewController {
         userDefaults?.set(toData(data: sharedMedia), forKey: kUserDefaultsKey)
         userDefaults?.set(message, forKey: kUserDefaultsMessageKey)
         userDefaults?.synchronize()
-        redirectToHostApp()
+        completeRequest()
+    }
+
+    private func completeRequest() {
+        DispatchQueue.main.async {
+            self.extensionContext?.completeRequest(returningItems: nil, completionHandler: { _ in 
+                self.redirectToHostApp()
+            })
+        }
     }
     
     private func redirectToHostApp() {
@@ -237,17 +245,14 @@ open class RSIShareViewController: UIViewController {
                 }
                 responder = responder!.next
             }
-        }
 
-        DispatchQueue.main.async {
-            self.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
         }
     }
     
     private func dismissWithError() {
         print("[ERROR] Error loading data!")
         DispatchQueue.main.async {
-            self.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+            self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
         }
     }
     
@@ -351,3 +356,4 @@ extension URL {
         return "application/octet-stream"
     }
 }
+
